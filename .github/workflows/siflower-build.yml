@@ -23,10 +23,7 @@ jobs:
             1806_SDK/openwrt-18.06/feeds
             1806_SDK/openwrt-18.06/build_dir
             1806_SDK/openwrt-18.06/staging_dir
-            1806_SDK/openwrt-18.06/tmp
           key: ${{ runner.os }}-sdk-${{ hashFiles('1806_SDK/openwrt-18.06/.config') }}
-          restore-keys: |
-            ${{ runner.os }}-sdk-
 
       - name: Install build dependencies
         run: |
@@ -40,41 +37,42 @@ jobs:
       - name: Setup ccache
         run: |
           mkdir -p ~/.ccache
-          echo "max_size = 10G" > ~/.ccache/ccache.conf
+          echo "max_size = 15G" > ~/.ccache/ccache.conf
           echo "export PATH=/usr/lib/ccache:$PATH" >> $GITHUB_ENV
 
       - name: Clone and prepare SDK
         run: |
-          git clone --depth=1 https://github.com/Siflower/1806_SDK.git
+          git clone --depth=1 -b release https://github.com/madfixed/1806_SDK.git
           cd 1806_SDK/openwrt-18.06
-          cp feeds.conf.default feeds.conf
           ./scripts/feeds update -a
           ./scripts/feeds install -a
-
-      - name: Add Xray package
-        run: |
-          cd 1806_SDK/openwrt-18.06
-          git clone https://github.com/yichya/luci-app-xray.git package/luci-app-xray
 
       - name: Configure Build
         run: |
           cd 1806_SDK/openwrt-18.06
-          cp configs/sft1200_config .config
-          echo 'CONFIG_PACKAGE_luci-app-xray=y' >> .config
-          echo 'CONFIG_CCACHE=y' >> .config
+          cat > .config << 'EOF'
+          CONFIG_TARGET_siflower_sf19a28_fullmask=y
+          CONFIG_TARGET_siflower_sf19a28_fullmask_DEVICE_sf19a28-fullmask=y
+          CONFIG_CCACHE=y
+          CONFIG_DEVEL=y
+          CONFIG_BUILD_LOG=y
+          CONFIG_TARGET_PER_DEVICE_ROOTFS=y
+          EOF
           make defconfig
 
       - name: Build firmware
         run: |
           cd 1806_SDK/openwrt-18.06
           make download -j8
-          make -j$(nproc) V=s || make -j1 V=s
+          make V=s -j$(nproc) || make V=s -j1
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v3
         with:
           name: siflower-firmware
-          path: 1806_SDK/openwrt-18.06/bin/targets/
+          path: |
+            1806_SDK/openwrt-18.06/bin/targets/
+            1806_SDK/openwrt-18.06/build.log
 
       - name: Create Release
         if: github.event_name == 'push'
@@ -87,5 +85,6 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Upload ccache stats
+      - name: Show ccache statistics
         run: ccache -s
+        
