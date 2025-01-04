@@ -46,30 +46,40 @@ jobs:
         working-directory: 1806_SDK/openwrt-18.06
         run: |
           cat > .config << 'EOF'
-          CONFIG_TARGET_siflower_sf19a28_fullmask=y
+          CONFIG_TARGET_siflower_sf19a28=y
+          CONFIG_TARGET_siflower_sf19a28_DEVICE_sf19a28-fullmask=y
           CONFIG_PACKAGE_luci-app-xray=y
           CONFIG_PACKAGE_xray-core=y
+          CONFIG_PACKAGE_luci=y
+          CONFIG_PACKAGE_luci-base=y
+          CONFIG_PACKAGE_luci-compat=y
           EOF
           make defconfig
 
       - name: Build package
         working-directory: 1806_SDK/openwrt-18.06
         run: |
-          make package/luci-app-xray/compile V=s
+          make package/luci-app-xray/compile V=s -j$(nproc)
 
-      - name: Upload package
+      - name: Organize packages
+        working-directory: 1806_SDK/openwrt-18.06
+        run: |
+          mkdir -p packages
+          find bin/packages/ -name "luci-app-xray*.ipk" -exec cp {} packages/ \;
+          find bin/packages/ -name "xray-core*.ipk" -exec cp {} packages/ \;
+
+      - name: Upload packages
         uses: actions/upload-artifact@v3
         with:
-          name: luci-app-xray
-          path: 1806_SDK/openwrt-18.06/bin/packages/*/luci-app-xray*.ipk
+          name: xray-packages
+          path: 1806_SDK/openwrt-18.06/packages/
 
       - name: Create Release
         if: github.event_name == 'push'
         uses: softprops/action-gh-release@v1
         with:
-          files: 1806_SDK/openwrt-18.06/bin/packages/*/luci-app-xray*.ipk
-          name: luci-app-xray-${{ github.sha }}
+          files: 1806_SDK/openwrt-18.06/packages/*
+          name: xray-packages-${{ github.sha }}
           tag_name: package-${{ github.sha }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        
