@@ -1,7 +1,7 @@
 #!/bin/bash
 #$1 should be p10 or p20
 
-board=a28_evb
+board=a28_rep
 imgtype=rel
 
 #$1 p10 p10m p20 86v clean default p10m
