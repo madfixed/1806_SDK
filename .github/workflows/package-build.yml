@@ -22,6 +22,7 @@ jobs:
             1806_SDK/openwrt-18.06/dl
             1806_SDK/openwrt-18.06/feeds
             1806_SDK/openwrt-18.06/staging_dir
+            1806_SDK/linux-4.14.90-dev
           key: ${{ runner.os }}-package-${{ github.sha }}
 
       - name: Install build dependencies
@@ -30,15 +31,13 @@ jobs:
           sudo apt-get install -y build-essential ccache libncurses5-dev \
           zlib1g-dev gawk git gettext libssl-dev xsltproc wget unzip python3
 
-      - name: Clone SDK and setup feeds
+      - name: Clone SDK with kernel
         run: |
           git clone --depth=1 -b release https://github.com/madfixed/1806_SDK.git
-          cd 1806_SDK/openwrt-18.06
-          rm -rf feeds.conf.default
-          echo 'src-git packages https://github.com/openwrt/packages.git;openwrt-18.06' > feeds.conf.default
-          echo 'src-git luci https://github.com/openwrt/luci.git;openwrt-18.06' >> feeds.conf.default
-          echo 'src-git routing https://github.com/openwrt/routing.git;openwrt-18.06' >> feeds.conf.default
-          echo 'src-git telephony https://github.com/openwrt/telephony.git;openwrt-18.06' >> feeds.conf.default
+          cd 1806_SDK
+          ln -sf linux-4.14.90-dev/linux-4.14.90 openwrt-18.06/linux-4.14.90
+          cd openwrt-18.06
+          cp target/linux/siflower/sf19a28_rep_fullmask_def.config .config
           ./scripts/feeds update -a
           ./scripts/feeds install -a
 
@@ -50,15 +49,8 @@ jobs:
       - name: Configure Build
         working-directory: 1806_SDK/openwrt-18.06
         run: |
-          cat > .config << 'EOF'
-          CONFIG_TARGET_siflower_sf19a28=y
-          CONFIG_TARGET_siflower_sf19a28_DEVICE_sf19a28-fullmask=y
-          CONFIG_PACKAGE_luci-app-xray=y
-          CONFIG_PACKAGE_xray-core=y
-          CONFIG_PACKAGE_luci=y
-          CONFIG_PACKAGE_luci-base=y
-          CONFIG_PACKAGE_luci-compat=y
-          EOF
+          echo 'CONFIG_PACKAGE_luci-app-xray=y' >> .config
+          echo 'CONFIG_PACKAGE_xray-core=y' >> .config
           make defconfig
 
       - name: Build package
