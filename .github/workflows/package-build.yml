@@ -1,0 +1,75 @@
+name: Build luci-app-xray Package
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-20.04
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Cache dependencies
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cache/pip
+            ~/.ccache
+            1806_SDK/openwrt-18.06/dl
+            1806_SDK/openwrt-18.06/feeds
+            1806_SDK/openwrt-18.06/staging_dir
+          key: ${{ runner.os }}-package-${{ github.sha }}
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential ccache libncurses5-dev \
+          zlib1g-dev gawk git gettext libssl-dev xsltproc wget unzip python3
+
+      - name: Clone SDK
+        run: |
+          git clone --depth=1 -b release https://github.com/madfixed/1806_SDK.git
+          cd 1806_SDK/openwrt-18.06
+          ./scripts/feeds update -a
+          ./scripts/feeds install -a
+
+      - name: Add Xray package
+        run: |
+          cd 1806_SDK/openwrt-18.06
+          git clone https://github.com/yichya/luci-app-xray.git package/luci-app-xray
+
+      - name: Configure Build
+        working-directory: 1806_SDK/openwrt-18.06
+        run: |
+          cat > .config << 'EOF'
+          CONFIG_TARGET_siflower_sf19a28_fullmask=y
+          CONFIG_PACKAGE_luci-app-xray=y
+          CONFIG_PACKAGE_xray-core=y
+          EOF
+          make defconfig
+
+      - name: Build package
+        working-directory: 1806_SDK/openwrt-18.06
+        run: |
+          make package/luci-app-xray/compile V=s
+
+      - name: Upload package
+        uses: actions/upload-artifact@v3
+        with:
+          name: luci-app-xray
+          path: 1806_SDK/openwrt-18.06/bin/packages/*/luci-app-xray*.ipk
+
+      - name: Create Release
+        if: github.event_name == 'push'
+        uses: softprops/action-gh-release@v1
+        with:
+          files: 1806_SDK/openwrt-18.06/bin/packages/*/luci-app-xray*.ipk
+          name: luci-app-xray-${{ github.sha }}
+          tag_name: package-${{ github.sha }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        
