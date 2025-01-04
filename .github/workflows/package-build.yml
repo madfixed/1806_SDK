@@ -30,10 +30,15 @@ jobs:
           sudo apt-get install -y build-essential ccache libncurses5-dev \
           zlib1g-dev gawk git gettext libssl-dev xsltproc wget unzip python3
 
-      - name: Clone SDK
+      - name: Clone SDK and setup feeds
         run: |
           git clone --depth=1 -b release https://github.com/madfixed/1806_SDK.git
           cd 1806_SDK/openwrt-18.06
+          rm -rf feeds.conf.default
+          echo 'src-git packages https://github.com/openwrt/packages.git;openwrt-18.06' > feeds.conf.default
+          echo 'src-git luci https://github.com/openwrt/luci.git;openwrt-18.06' >> feeds.conf.default
+          echo 'src-git routing https://github.com/openwrt/routing.git;openwrt-18.06' >> feeds.conf.default
+          echo 'src-git telephony https://github.com/openwrt/telephony.git;openwrt-18.06' >> feeds.conf.default
           ./scripts/feeds update -a
           ./scripts/feeds install -a
 
@@ -61,25 +66,19 @@ jobs:
         run: |
           make package/luci-app-xray/compile V=s -j$(nproc)
 
-      - name: Organize packages
-        working-directory: 1806_SDK/openwrt-18.06
-        run: |
-          mkdir -p packages
-          find bin/packages/ -name "luci-app-xray*.ipk" -exec cp {} packages/ \;
-          find bin/packages/ -name "xray-core*.ipk" -exec cp {} packages/ \;
-
       - name: Upload packages
         uses: actions/upload-artifact@v3
         with:
           name: xray-packages
-          path: 1806_SDK/openwrt-18.06/packages/
+          path: 1806_SDK/openwrt-18.06/bin/packages/**/luci-app-xray*.ipk
 
       - name: Create Release
         if: github.event_name == 'push'
         uses: softprops/action-gh-release@v1
         with:
-          files: 1806_SDK/openwrt-18.06/packages/*
-          name: xray-packages-${{ github.sha }}
+          files: 1806_SDK/openwrt-18.06/bin/packages/**/luci-app-xray*.ipk
+          name: xray-package-${{ github.sha }}
           tag_name: package-${{ github.sha }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          
