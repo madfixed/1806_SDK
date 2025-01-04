@@ -1,0 +1,78 @@
+name: GL-SFT1200 Firmware Build
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+  schedule:
+    - cron: '0 0 * * 0'
+
+jobs:
+  build:
+    runs-on: ubuntu-20.04
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Setup environment
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential ccache ecj fastjar file g++ gawk \
+          gettext git java-propose-classpath libelf-dev libncurses5-dev \
+          libncursesw5-dev libssl-dev python python2.7-dev python3 unzip wget \
+          python3-distutils python3-setuptools rsync subversion swig time \
+          xsltproc zlib1g-dev
+
+      - name: Clone Siflower SDK
+        run: |
+          git clone https://github.com/Siflower/1806_SDK.git
+          cd 1806_SDK
+          ./scripts/feeds update -a
+          ./scripts/feeds install -a
+
+      - name: Clone luci-app-xray
+        run: |
+          cd 1806_SDK
+          git clone https://github.com/yichya/luci-app-xray.git package/luci-app-xray
+
+      - name: Configure Build
+        run: |
+          cd 1806_SDK
+          cp configs/sft1200_def_config .config
+          echo 'CONFIG_PACKAGE_luci-app-xray=y' >> .config
+          echo 'CONFIG_PACKAGE_xray-core=y' >> .config
+          make defconfig
+
+      - name: Build firmware
+        run: |
+          cd 1806_SDK
+          make -j$(nproc) V=s
+
+      - name: Organize files
+        run: |
+          mkdir -p firmware
+          find 1806_SDK/bin/targets/ -name "*.bin" -o -name "*.img" | xargs -I {} cp {} firmware/
+
+      - name: Upload firmware artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: gl-sft1200-firmware
+          path: firmware/
+
+      - name: Create Release
+        if: github.event_name == 'push'
+        uses: softprops/action-gh-release@v1
+        with:
+          files: firmware/*
+          name: GL-SFT1200 Release ${{ github.sha }}
+          tag_name: release-${{ github.sha }}
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Cleanup
+        if: always()
+        run: |
+          sudo rm -rf 1806_SDK
+          sudo rm -rf firmware
