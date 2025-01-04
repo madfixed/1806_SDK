@@ -21,7 +21,6 @@ jobs:
         run: |
           git clone --depth=1 -b release https://github.com/madfixed/1806_SDK.git
           cd 1806_SDK/openwrt-18.06
-          cp feeds.conf.default feeds.conf
           sed -i 's#git.openwrt.org/feed#github.com/openwrt-mirror#' feeds.conf
           ./scripts/feeds clean
           ./scripts/feeds update -a
